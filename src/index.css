@@ -109,6 +109,48 @@ body {
     animation: fadeIn 0.4s ease-out;
 }
 
+.hero-panel {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+
+.hero-subtitle {
+    margin-top: -0.6rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.hero-stats {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.stat-chip {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 999px;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
+}
+
+.stat-chip span {
+    color: #fff;
+    font-weight: 700;
+}
+
+.stat-chip.danger span {
+    color: #ff9fa8;
+}
+
 h2 {
     font-weight: 300;
     margin-bottom: 1.5rem;
@@ -128,6 +170,12 @@ h2 {
     padding: 1.5rem;
     margin-bottom: 1.5rem;
     box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.card:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
 }
 
 .input-row {
@@ -234,6 +282,12 @@ input[type="text"]:focus {
     opacity: 0.8;
 }
 
+.tips-line {
+    margin-top: 0.75rem;
+    font-size: 0.78rem;
+    color: rgba(255, 255, 255, 0.62);
+}
+
 /* Downloads List */
 .downloads-list {
     display: flex;
@@ -248,6 +302,12 @@ input[type="text"]:focus {
     border-radius: 12px;
     padding: 1rem;
     animation: fadeIn 0.5s ease-out;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.download-item:hover {
+    border-color: rgba(0, 210, 255, 0.35);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
 }
 
 .item-btns {
@@ -499,4 +559,45 @@ input[type="text"]:focus {
 
 .btn-small:hover {
     background: rgba(255, 255, 255, 0.2);
+}
+
+@media (max-width: 960px) {
+    .sidebar {
+        width: 84px;
+        padding: 1.2rem 0.6rem;
+    }
+
+    .menu-label {
+        display: none;
+    }
+
+    .sidebar-title {
+        font-size: 1rem;
+        margin-bottom: 1.8rem;
+        padding-left: 0.5rem;
+    }
+
+    .main-content {
+        padding: 1.2rem;
+    }
+}
+
+@media (max-width: 720px) {
+    .hero-panel {
+        flex-direction: column;
+    }
+
+    .hero-stats {
+        justify-content: flex-start;
+    }
+
+    .control-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .btn,
+    .btn-secondary {
+        width: 100%;
+    }
 }

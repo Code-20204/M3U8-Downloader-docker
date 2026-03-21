@@ -1,0 +1,13 @@
+services:
+  m3u8-downloader:
+    build: .
+    container_name: m3u8-downloader
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - DOWNLOAD_DIR=/downloads
+      - TEMP_DIR=/tmp/m3u8-temp
+    volumes:
+      - ./downloads:/downloads
+    restart: unless-stopped
