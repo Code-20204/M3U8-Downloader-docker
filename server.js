@@ -34,6 +34,26 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'dist')));
 
+
+function sanitizeFileName(fileName) {
+    const raw = String(fileName || '').trim();
+    if (!raw) return `video_${Date.now()}`;
+    return raw;
+}
+
+function resolveSavePath(inputPath) {
+    if (!inputPath || typeof inputPath !== 'string') return DOWNLOAD_DIR;
+
+    const requested = path.resolve(inputPath);
+    const base = path.resolve(DOWNLOAD_DIR);
+
+    if (requested === base || requested.startsWith(base + path.sep)) {
+        return requested;
+    }
+
+    return DOWNLOAD_DIR;
+}
+
 // --- 历史记录管理 ---
 async function getHistory() {
     if (await fs.pathExists(HISTORY_FILE)) {
@@ -155,6 +175,54 @@ class DownloadTask {
         else return (bytesPerSec / (1024 * 1024)).toFixed(1) + ' MB/s';
     }
 
+    mergeSegments(fileListPath, outputPath) {
+        const createCommand = (mode) => {
+            const command = ffmpeg()
+                .input(fileListPath)
+                .inputOptions(['-f', 'concat', '-safe', '0'])
+                .output(outputPath);
+
+            if (mode === 'copy') {
+                command.outputOptions([
+                    '-c', 'copy',
+                    '-bsf:a', 'aac_adtstoasc',
+                    '-fflags', '+genpts',
+                    '-max_interleave_delta', '0',
+                    '-movflags', '+faststart'
+                ]);
+            } else {
+                command.outputOptions([
+                    '-c:v', 'copy',
+                    '-c:a', 'aac',
+                    '-b:a', '192k',
+                    '-ar', '48000',
+                    '-ac', '2',
+                    '-movflags', '+faststart'
+                ]);
+            }
+
+            return command;
+        };
+
+        const runCommand = (mode) => new Promise((resolve, reject) => {
+            createCommand(mode)
+                .on('progress', (progress) => {
+                    const percent = Math.max(0, Math.min(100, Math.round(progress.percent || 0)));
+                    this.progress('merging', percent);
+                })
+                .on('end', resolve)
+                .on('error', reject)
+                .run();
+        });
+
+        return runCommand('copy')
+            .catch(async (copyErr) => {
+                this.log(`无损合并失败，尝试音频修复模式: ${copyErr.message}`, 'warn');
+                await fs.remove(outputPath).catch(() => { });
+                return runCommand('audio-fallback');
+            });
+    }
+
     async start() {
         try {
             this.log(`正在获取 M3U8: ${this.url}`);
@@ -201,7 +269,11 @@ class DownloadTask {
                         response.data.on('data', (chunk) => { this.downloadedBytes += chunk.length; });
                         response.data.pipe(writer);
                         return new Promise((resolve, reject) => {
-                            writer.on('finish', () => {
+                            writer.on('finish', async () => {
+                                const stat = await fs.stat(filePath).catch(() => ({ size: 0 }));
+                                if (!stat.size) {
+                                    return reject(new Error('分片内容为空，可能源站返回异常内容'));
+                                }
                                 this.downloadedSegments++;
                                 const now = Date.now();
                                 if (now - this.lastSpeedUpdate > 500) {
@@ -242,6 +314,7 @@ class DownloadTask {
                 await this.checkPaused();
                 if (this.isCancelled) {
                     this.error('下载已手动取消');
+                    await fs.remove(this.tempDir).catch(console.error);
                     return;
                 }
                 const batch = tasks.slice(i, i + batchSize).map(t => t());
@@ -265,29 +338,15 @@ class DownloadTask {
                 counter++;
             }
 
-            ffmpeg()
-                .input(fileListPath)
-                .inputOptions(['-f', 'concat', '-safe', '0'])
-                .outputOptions('-c', 'copy')
-                .output(finalOutputPath)
-                .on('progress', (progress) => {
-                    const percent = Math.round(progress.percent || 0);
-                    this.progress('merging', percent);
-                })
-                .on('end', () => {
-                    this.log(`合并完成! 文件已保存至: ${finalOutputPath}`, 'success');
-                    this.complete(finalOutputPath);
-                    fs.remove(this.tempDir).catch(console.error);
-                    activeDownloads.delete(this.id);
-                })
-                .on('error', (err) => {
-                    this.error(`合并失败: ${err.message}`);
-                    activeDownloads.delete(this.id);
-                })
-                .run();
+            await this.mergeSegments(fileListPath, finalOutputPath);
+            this.log(`合并完成! 文件已保存至: ${finalOutputPath}`, 'success');
+            this.complete(finalOutputPath);
+            fs.remove(this.tempDir).catch(console.error);
+            activeDownloads.delete(this.id);
 
         } catch (err) {
             this.error(`错误: ${err.message}`);
+            fs.remove(this.tempDir).catch(console.error);
             activeDownloads.delete(this.id);
         }
     }
@@ -296,12 +355,24 @@ class DownloadTask {
 const activeDownloads = new Map();
 
 // --- REST API ---
-app.post('/api/download/start', (req, { url, fileName, savePath }, res) => {
-    const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
-    const task = new DownloadTask(id, url, fileName, savePath);
+app.post('/api/download/start', async (req, res) => {
+    const { url, fileName, savePath } = req.body || {};
+    if (!url || typeof url !== 'string') {
+        return res.status(400).json({ message: '参数错误: url 必填且必须是字符串。' });
+    }
+
+    const normalizedFileName = sanitizeFileName(fileName);
+    const normalizedSavePath = resolveSavePath(savePath);
+    await fs.ensureDir(normalizedSavePath);
+
+    const id = Date.now().toString() + Math.random().toString(36).slice(2, 7);
+    const task = new DownloadTask(id, url, normalizedFileName, normalizedSavePath);
     activeDownloads.set(id, task);
+
+    io.emit('download-started', { id, url, fileName: normalizedFileName });
     task.start();
-    res.json({ id, url, fileName });
+
+    return res.json({ id, url, fileName: normalizedFileName, savePath: normalizedSavePath });
 });
 
 app.post('/api/download/pause', (req, res) => {
@@ -331,6 +402,11 @@ app.post('/api/download/rename', (req, res) => {
     const task = activeDownloads.get(id);
     if (task) task.updateFileName(newName);
     res.json({ success: !!task });
+});
+
+
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', downloadDir: DOWNLOAD_DIR, tempDir: TEMP_DIR });
 });
 
 app.get('/api/history', async (req, res) => {

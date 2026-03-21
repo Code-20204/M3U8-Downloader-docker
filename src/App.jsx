@@ -179,11 +179,19 @@ function DownloaderView({ downloads, onRename, onCancel, onPause, onResume, onRe
     const [url, setUrl] = useState('');
     const [fileName, setFileName] = useState('');
     const [savePath, setSavePath] = useState('');
+    const activeCount = downloads.filter(d => d.phase === 'downloading' || d.phase === 'merging' || d.phase === 'init').length;
+    const completeCount = downloads.filter(d => d.phase === 'complete').length;
+    const errorCount = downloads.filter(d => d.phase === 'error').length;
 
     const handleDownload = () => {
-        if (!url) return;
+        const normalizedUrl = url.trim();
+        if (!normalizedUrl) return;
+        if (!/^https?:\/\//i.test(normalizedUrl)) {
+            alert('请输入有效的 http/https M3U8 链接');
+            return;
+        }
         const finalName = fileName.trim() || `video_${Date.now()}`;
-        api.startDownload({ url, fileName: finalName, savePath });
+        api.startDownload({ url: normalizedUrl, fileName: finalName, savePath });
         setUrl('');
         setFileName('');
     };
@@ -197,7 +205,17 @@ function DownloaderView({ downloads, onRename, onCancel, onPause, onResume, onRe
 
     return (
         <div className="view-container">
-            <h2>新建任务</h2>
+            <div className="hero-panel">
+                <div>
+                    <h2>新建任务</h2>
+                    <p className="hero-subtitle">更稳的 Docker Web 下载模式 · 自动分片重试 · 合并异常自动降级修复</p>
+                </div>
+                <div className="hero-stats">
+                    <div className="stat-chip"><span>{activeCount}</span>进行中</div>
+                    <div className="stat-chip"><span>{completeCount}</span>已完成</div>
+                    <div className="stat-chip danger"><span>{errorCount}</span>异常</div>
+                </div>
+            </div>
             <div className="card">
                 <div className="input-row">
                     <div className="input-group" style={{ marginBottom: '1rem' }}>
@@ -229,10 +247,11 @@ function DownloaderView({ downloads, onRename, onCancel, onPause, onResume, onRe
                     </button>
                 </div>
                 {savePath && <div className="path-display">保存至: {savePath}</div>}
+                <div className="tips-line">Tips：建议优先使用稳定网络，保存目录挂载 SSD 可显著提升体验。</div>
             </div>
 
             <div className="downloads-list">
-                {downloads.length === 0 && <p style={{ textAlign: 'center', color: '#888' }}>暂无正在进行的任务</p>}
+                {downloads.length === 0 && <p className="empty-text">暂无正在进行的任务，添加一个 M3U8 链接试试吧。</p>}
                 {downloads.map(item => (
                     <DownloadItem
                         key={item.id}
