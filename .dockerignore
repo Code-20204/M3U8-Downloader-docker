@@ -1,0 +1,9 @@
+node_modules
+dist
+dist_electron
+downloads
+temp
+.git
+.gitignore
+npm-debug.log*
+.DS_Store
