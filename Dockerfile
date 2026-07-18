@@ -1,9 +1,8 @@
-FROM node:20-alpine
+FROM node:20-bookworm-slim
 
 WORKDIR /app
 
-# 安装必要的系统依赖（如果 ffmpeg-static 不适用，可以在此安装系统 ffmpeg）
-# RUN apk add --no-cache ffmpeg
+# 使用 Debian slim 运行时，避免 Alpine/musl 与 ffmpeg-static 二进制兼容性问题。
 
 # 复制 package.json
 COPY package*.json ./

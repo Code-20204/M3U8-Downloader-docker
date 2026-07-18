@@ -57,8 +57,48 @@ npm run electron:build
 docker build -t m3u8-downloader .
 docker run --rm -p 3000:3000 -v $(pwd)/downloads:/downloads m3u8-downloader
 
-# 方式 B：docker compose
+# 方式 B：docker compose（推荐云端/服务器）
 docker compose up -d --build
+```
+
+项目已内置可直接创建容器的 `docker-compose.yml`：
+
+```yaml
+services:
+  m3u8-downloader:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: m3u8-downloader:local
+    container_name: m3u8-downloader
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      DOWNLOAD_DIR: /downloads
+      TEMP_DIR: /tmp/m3u8-temp
+      NODE_ENV: production
+    volumes:
+      - ./downloads:/downloads
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+```
+
+常用容器命令：
+```bash
+# 后台构建并启动
+docker compose up -d --build
+
+# 查看日志
+docker compose logs -f
+
+# 停止并删除容器（保留 ./downloads 文件）
+docker compose down
 ```
 
 启动后访问：`http://localhost:3000`
