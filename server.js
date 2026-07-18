@@ -420,7 +420,8 @@ app.post('/api/history/clear', async (req, res) => {
 });
 
 // 默认路由指向前端
-app.get('*', (req, res) => {
+app.use((req, res, next) => {
+    if (req.method !== 'GET') return next();
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
